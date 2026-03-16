@@ -1,7 +1,3 @@
-# Torrente — Local Network P2P File Sharing
-
-A fully working BitTorrent-style app for local networks.
-Built with Python standard library only (no pip installs needed).
 
 ---
 
