@@ -23,10 +23,11 @@ class TrackerServer:
         self._running = False
         self._server_sock = None
 
-    # ------------------------------------------------------------------ #
+    
+    
+    
+    
     #  Start / Stop                                                        #
-    # ------------------------------------------------------------------ #
-
     def start(self):
         self._running = True
         self._server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -54,9 +55,20 @@ class TrackerServer:
         if self._server_sock:
             self._server_sock.close()
 
-    # ------------------------------------------------------------------ #
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     #  Client handler                                                      #
-    # ------------------------------------------------------------------ #
 
     def _handle_client(self, conn: socket.socket, addr):
         try:
@@ -83,9 +95,17 @@ class TrackerServer:
         finally:
             conn.close()
 
-    # ------------------------------------------------------------------ #
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     #  Actions                                                             #
-    # ------------------------------------------------------------------ #
 
     def _handle_announce(self, msg: dict, addr) -> dict:
         """Peer announces itself as having a torrent."""
@@ -142,10 +162,20 @@ class TrackerServer:
                 })
             return {"status": "ok", "torrents": result}
 
-    # ------------------------------------------------------------------ #
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     #  Helpers                                                             #
-    # ------------------------------------------------------------------ #
-
     def _recv_all(self, conn: socket.socket) -> bytes:
         chunks = []
         while True:

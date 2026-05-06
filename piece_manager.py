@@ -18,8 +18,14 @@ class PieceManager:
         self.total_pieces = 0
 
 
-    #  SEEDER: Load and split a file
 
+
+
+
+
+
+
+    #  SEEDER: Load and split a file
 
     def load_file(self, filepath: str):
         """Load a file and split it into pieces (seeder side)."""
@@ -40,8 +46,13 @@ class PieceManager:
         return self.get_torrent_info()
 
 
-    #  LEECHER: Prepare to receive a file
 
+
+
+
+
+
+    #  LEECHER: Prepare to receive a file
 
     def prepare_download(self, torrent_info: dict, save_dir: str):
         """Set up piece manager for downloading (leecher side)."""
@@ -103,8 +114,16 @@ class PieceManager:
         return True
 
 
-    #  Torrent info dict (shared between peers)
 
+
+
+
+
+
+
+
+
+    #  Torrent info dict (shared between peers)
 
     def get_torrent_info(self) -> dict:
         return {

@@ -42,9 +42,20 @@ class PeerNode:
         self.lock = threading.Lock()
 
 
+
+
+
+
+
+
+
+
+
+
+
+
     #  Seeder: Share a file
-
-
+    
     def share_file(self, filepath: str) -> str:
         """Load file, register with tracker, start serving. Returns torrent_id."""
         torrent_info = self.piece_manager.load_file(filepath)
@@ -98,6 +109,17 @@ class PeerNode:
         # Start download loop in background
         threading.Thread(target=self._download_loop, daemon=True).start()
 
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
     #  Piece server (seeder role)
 
@@ -153,7 +175,19 @@ class PeerNode:
             conn.close()
 
 
-    #  Download loop (leecher role)
+
+
+
+
+
+
+
+
+
+
+
+
+    #  Download loop (for leecher role)
 
 
     def _download_loop(self):

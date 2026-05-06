@@ -23,6 +23,7 @@ def get_local_ip() -> str:
         return "127.0.0.1"
 
 
+
 class TorrenteApp:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -52,7 +53,19 @@ class TorrenteApp:
         self._tab_download(nb)
         self._tab_log(nb)
 
-    # ── Tab: Tracker ──────────────────────────────────────────────────────────
+
+
+
+
+
+
+
+
+
+
+
+
+    # Tab: Tracker 
 
     def _tab_tracker(self, nb):
         tab = tk.Frame(nb)
@@ -93,7 +106,20 @@ class TorrenteApp:
 
         self._refresh_swarm_display()
 
-    # ── Tab: Share ────────────────────────────────────────────────────────────
+
+
+
+
+
+
+
+
+
+
+
+
+
+    #  Tab: Share 
 
     def _tab_share(self, nb):
         tab = tk.Frame(nb)
@@ -138,7 +164,19 @@ class TorrenteApp:
         self.torrent_id_frame = tk.Frame(tab, relief="groove", bd=1)
         self.torrent_id_label = tk.Label(self.torrent_id_frame, text="", anchor="w", justify="left")
 
-    # ── Tab: Download ─────────────────────────────────────────────────────────
+
+
+
+
+
+
+
+
+
+
+
+
+    # Tab: Download 
 
     def _tab_download(self, nb):
         tab = tk.Frame(nb)
@@ -206,7 +244,22 @@ class TorrenteApp:
         self.progress_label = tk.Label(tab, text="Idle", anchor="w")
         self.progress_label.pack(anchor="w", padx=10)
 
-    # ── Tab: Log ──────────────────────────────────────────────────────────────
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    # Tab: Log 
 
     def _tab_log(self, nb):
         tab = tk.Frame(nb)
@@ -220,7 +273,7 @@ class TorrenteApp:
         self.log_box = scrolledtext.ScrolledText(tab, state="disabled", wrap="word")
         self.log_box.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
-    # ── Actions ───────────────────────────────────────────────────────────────
+    # Actions 
 
     def _start_tracker(self):
         port = int(self.tracker_port_var.get())
@@ -355,7 +408,11 @@ class TorrenteApp:
             daemon=True
         ).start()
 
-    # ── Callbacks ─────────────────────────────────────────────────────────────
+
+
+
+
+    #  Callbacks 
 
     def _on_progress(self, done: int, total: int, filename: str):
         pct = (done / total) * 100
@@ -375,7 +432,18 @@ class TorrenteApp:
         messagebox.showinfo("Download Complete", f"File saved to:\n{filepath}")
 
 
-    # ── Swarm Display Refresh ─────────────────────────────────────────────────
+
+
+
+
+
+
+
+
+
+
+
+    # Swarm Display Refresh 
 
     def _refresh_swarm_display(self):
         if self.tracker_server:
@@ -396,7 +464,14 @@ class TorrenteApp:
 
 
 
-    # ── Logging ───────────────────────────────────────────────────────────────
+
+
+
+
+
+
+
+    #  Logging 
 
     def _log(self, msg: str):
         timestamp = time.strftime("%H:%M:%S")
