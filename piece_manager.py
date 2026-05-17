@@ -65,6 +65,17 @@ class PieceManager:
         self.filepath = os.path.join(save_dir, self.filename)
 
 
+
+
+
+
+
+
+
+
+
+
+
     #  Piece operations
     def save_piece(self, index: int, data: bytes) -> bool:
         """Verify and store a downloaded piece. Returns True if valid."""

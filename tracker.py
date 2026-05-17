@@ -27,7 +27,7 @@ class TrackerServer:
     
     
     
-    #  Start / Stop                                                        #
+    #  Start / Stop the tracker server which is running on port 6881 
     def start(self):
         self._running = True
         self._server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

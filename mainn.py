@@ -273,8 +273,19 @@ class TorrenteApp:
         self.log_box = scrolledtext.ScrolledText(tab, state="disabled", wrap="word")
         self.log_box.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
-    # Actions 
 
+
+
+
+
+
+
+
+
+
+
+
+    # Actions 
     def _start_tracker(self):
         port = int(self.tracker_port_var.get())
         self.tracker_server = TrackerServer(port=port, log_callback=self._log)
@@ -285,6 +296,9 @@ class TorrenteApp:
         self.stop_tracker_btn.config(state="normal")
         self._log(f"Tracker started on {self.local_ip}:{port}")
 
+
+
+
     def _stop_tracker(self):
         if self.tracker_server:
             self.tracker_server.stop()
@@ -293,6 +307,9 @@ class TorrenteApp:
         self.start_tracker_btn.config(state="normal")
         self.stop_tracker_btn.config(state="disabled")
         self._log("Tracker stopped.")
+        
+        
+        
 
     def _pick_file(self):
         path = filedialog.askopenfilename(title="Select file to share")
@@ -302,11 +319,20 @@ class TorrenteApp:
             size_mb = os.path.getsize(path) / (1024 * 1024)
             self.share_file_label.config(text=f"{name} ({size_mb:.2f} MB)")
 
+
+
+
     def _pick_save_dir(self):
         d = filedialog.askdirectory(title="Save downloaded files to...")
         if d:
             self.dl_save_dir = d
             self.dl_save_label.config(text=d)
+
+
+
+
+
+
 
     def _start_seeding(self):
         if not self.share_filepath:
@@ -319,7 +345,7 @@ class TorrenteApp:
         if self.peer_node:
             self.peer_node.stop()
 
-        self.peer_node = PeerNode(
+        self.peer_node = PeerNode( 
             host=self.local_ip,
             peer_port=peer_port,
             tracker_ip=tracker_ip,
@@ -334,6 +360,14 @@ class TorrenteApp:
                 self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
 
         threading.Thread(target=run, daemon=True).start()
+        
+        
+        
+        
+        
+        
+        
+        
 
     def _show_torrent_id(self, torrent_id: str):
         self.torrent_id_frame.pack(fill="x", padx=10, pady=8)
@@ -412,6 +446,19 @@ class TorrenteApp:
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
     #  Callbacks 
 
     def _on_progress(self, done: int, total: int, filename: str):
@@ -444,7 +491,6 @@ class TorrenteApp:
 
 
     # Swarm Display Refresh 
-
     def _refresh_swarm_display(self):
         if self.tracker_server:
             info = self.tracker_server.swarm_info
