@@ -146,6 +146,11 @@ class PeerNode:
                 continue
             except OSError:
                 break
+            
+            
+            
+            
+            
 
     def _serve_peer(self, conn: socket.socket, addr):
         """Handle incoming requests from another peer."""

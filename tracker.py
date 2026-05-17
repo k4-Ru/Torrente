@@ -135,6 +135,14 @@ class TrackerServer:
                 "torrent_info": swarm["info"],
                 "peers": other_peers,
             }
+            
+            
+            
+            
+            
+            
+            
+            
 
     def _handle_get_peers(self, msg: dict) -> dict:
         """Return current peer list for a torrent."""

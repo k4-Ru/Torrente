@@ -29,19 +29,127 @@ class TorrenteApp:
         self.root = root
         self.root.title("Torrente")
         self.root.geometry("860x640")
+        self.colors = {
+            "teal_900": "#12908e",
+            "teal_700": "#16594a",
+            "teal_500": "#97cecc",
+            "accent_1": "#c4421a",
+            "accent_2": "#f98f45",
+            "bg": "#f4fbfb",
+        }
 
         self.local_ip = get_local_ip()
         self.tracker_server = None
         self.peer_node = None
 
+        self._apply_theme()
         self._build_ui()
+        self.root.after(150, self._show_intro_splash)
+
+    def _apply_theme(self):
+        self.root.configure(bg=self.colors["bg"])
+        style = ttk.Style()
+        try:
+            style.theme_use("clam")
+        except Exception:
+            pass
+        style.configure("TNotebook", background=self.colors["bg"], borderwidth=0)
+        style.configure(
+            "TNotebook.Tab",
+            padding=(14, 8),
+            background=self.colors["teal_500"],
+            foreground=self.colors["teal_700"],
+        )
+        style.map(
+            "TNotebook.Tab",
+            background=[("selected", self.colors["teal_900"])],
+            foreground=[("selected", "#ffffff")],
+        )
+        style.configure("TSeparator", background=self.colors["teal_500"])
+        style.configure("TButton", padding=(10, 5))
+        style.configure(
+            "Teal.Horizontal.TProgressbar",
+            troughcolor="#d7eeed",
+            background=self.colors["teal_900"],
+            bordercolor=self.colors["teal_700"],
+            lightcolor=self.colors["teal_900"],
+            darkcolor=self.colors["teal_700"],
+        )
+
+    def _show_intro_splash(self):
+        splash = tk.Frame(self.root, bg=self.colors["bg"])
+        splash.place(relx=0, rely=0, relwidth=1, relheight=1)
+
+        center = tk.Frame(splash, bg=self.colors["bg"])
+        center.place(relx=0.5, rely=0.5, anchor="center")
+
+        title = tk.Label(
+            center,
+            text="Torrente",
+            font=("TkDefaultFont", 30, "bold"),
+            bg=self.colors["bg"],
+            fg=self.colors["bg"],
+        )
+        title.pack()
+
+        names = tk.Label(
+            center,
+            text="Peer to Peer Torrent Client\nBy: 2\nCarl Nicolas Navarro\nCristina Ronquillo\nKlarisse Anne Borlado\nThomen Jeilo Reyes\nXymer Estrellado",    
+            font=("TkDefaultFont", 11),
+            bg=self.colors["bg"],
+            fg=self.colors["bg"],
+            justify="center",
+        )
+        names.pack(pady=(10, 0))
+
+        def hex_to_rgb(h):
+            h = h.lstrip("#")
+            return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+        def rgb_to_hex(rgb):
+            return "#{:02x}{:02x}{:02x}".format(*rgb)
+
+        def blend(c1, c2, t):
+            return tuple(int(a + (b - a) * t) for a, b in zip(c1, c2))
+
+        bg = hex_to_rgb(self.colors["bg"])
+        title_fg = hex_to_rgb(self.colors["teal_900"])
+        names_fg = hex_to_rgb(self.colors["teal_700"])
+        fade_steps = 24
+        frame_ms = 35
+
+        def run_fade_in(i=0):
+            t = min(1.0, i / fade_steps)
+            title.config(fg=rgb_to_hex(blend(bg, title_fg, t)))
+            names.config(fg=rgb_to_hex(blend(bg, names_fg, t)))
+            if i < fade_steps:
+                self.root.after(frame_ms, lambda: run_fade_in(i + 1))
+            else:
+                self.root.after(700, run_fade_out)
+
+        def run_fade_out(i=fade_steps):
+            t = max(0.0, i / fade_steps)
+            title.config(fg=rgb_to_hex(blend(bg, title_fg, t)))
+            names.config(fg=rgb_to_hex(blend(bg, names_fg, t)))
+            if i > 0:
+                self.root.after(frame_ms, lambda: run_fade_out(i - 1))
+            else:
+                splash.destroy()
+
+        run_fade_in()
 
     def _build_ui(self):
         # Header
-        header = tk.Frame(self.root)
+        header = tk.Frame(self.root, bg=self.colors["teal_900"])
         header.pack(fill="x", padx=10, pady=5)
-        tk.Label(header, text="Torrente").pack(side="left")
-        tk.Label(header, text=f"Your IP: {self.local_ip}").pack(side="right")
+        tk.Label(
+            header, text="Torrente", font=("TkDefaultFont", 12, "bold"),
+            bg=self.colors["teal_900"], fg="#ffffff", padx=8, pady=6
+        ).pack(side="left")
+        tk.Label(
+            header, text=f"Your IP: {self.local_ip}",
+            bg=self.colors["teal_900"], fg="#ffffff", padx=8, pady=6
+        ).pack(side="right")
 
         ttk.Separator(self.root).pack(fill="x", padx=10)
 
@@ -90,9 +198,9 @@ class TorrenteApp:
         # Buttons
         btn_frame = tk.Frame(tab)
         btn_frame.pack(anchor="w", padx=10, pady=4)
-        self.start_tracker_btn = tk.Button(btn_frame, text="Start Tracker", command=self._start_tracker)
+        self.start_tracker_btn = ttk.Button(btn_frame, text="Start Tracker", command=self._start_tracker)
         self.start_tracker_btn.pack(side="left", padx=(0, 5))
-        self.stop_tracker_btn = tk.Button(btn_frame, text="Stop Tracker", command=self._stop_tracker, state="disabled")
+        self.stop_tracker_btn = ttk.Button(btn_frame, text="Stop Tracker", command=self._stop_tracker, state="disabled")
         self.stop_tracker_btn.pack(side="left")
 
         ttk.Separator(tab).pack(fill="x", padx=10, pady=8)
@@ -152,13 +260,13 @@ class TorrenteApp:
         tk.Label(file_row, text="File:", width=14, anchor="w").pack(side="left")
         self.share_file_label = tk.Label(file_row, text="No file selected", anchor="w")
         self.share_file_label.pack(side="left", fill="x", expand=True)
-        tk.Button(file_row, text="Browse", command=self._pick_file).pack(side="left")
+        ttk.Button(file_row, text="Browse", command=self._pick_file).pack(side="left")
 
         self.share_filepath = None
 
         ttk.Separator(tab).pack(fill="x", padx=10, pady=8)
 
-        tk.Button(tab, text="Start Seeding", command=self._start_seeding).pack(anchor="w", padx=10)
+        ttk.Button(tab, text="Start Seeding", command=self._start_seeding).pack(anchor="w", padx=10)
 
         # Torrent ID display (hidden until seeding starts)
         self.torrent_id_frame = tk.Frame(tab, relief="groove", bd=1)
@@ -213,15 +321,15 @@ class TorrenteApp:
         tk.Label(row4, text="Save to:", width=14, anchor="w").pack(side="left")
         self.dl_save_label = tk.Label(row4, text=os.path.expanduser("~"), anchor="w")
         self.dl_save_label.pack(side="left", fill="x", expand=True)
-        tk.Button(row4, text="Browse", command=self._pick_save_dir).pack(side="left")
+        ttk.Button(row4, text="Browse", command=self._pick_save_dir).pack(side="left")
         self.dl_save_dir = os.path.expanduser("~")
 
         ttk.Separator(tab).pack(fill="x", padx=10, pady=8)
 
         btn_row = tk.Frame(tab)
         btn_row.pack(anchor="w", padx=10, pady=4)
-        tk.Button(btn_row, text="List Available Torrents", command=self._list_torrents).pack(side="left", padx=(0, 5))
-        tk.Button(btn_row, text="Start Download", command=self._start_download).pack(side="left")
+        ttk.Button(btn_row, text="List Available Torrents", command=self._list_torrents).pack(side="left", padx=(0, 5))
+        ttk.Button(btn_row, text="Start Download", command=self._start_download).pack(side="left")
 
         # Torrent listbox
         tk.Label(tab, text="Available Torrents:").pack(anchor="w", padx=10, pady=(8, 2))
@@ -238,7 +346,7 @@ class TorrenteApp:
         self.dl_filename_label = tk.Label(tab, text="", anchor="w")
         self.dl_filename_label.pack(anchor="w", padx=10)
 
-        self.progress_bar = ttk.Progressbar(tab, length=600, mode="determinate")
+        self.progress_bar = ttk.Progressbar(tab, length=600, mode="determinate", style="Teal.Horizontal.TProgressbar")
         self.progress_bar.pack(fill="x", padx=10, pady=4)
 
         self.progress_label = tk.Label(tab, text="Idle", anchor="w")
@@ -268,7 +376,7 @@ class TorrenteApp:
         top_row = tk.Frame(tab)
         top_row.pack(fill="x", padx=10, pady=5)
         tk.Label(top_row, text="Activity Log", font=("TkDefaultFont", 11, "bold")).pack(side="left")
-        tk.Button(top_row, text="Clear", command=self._clear_log).pack(side="right")
+        ttk.Button(top_row, text="Clear", command=self._clear_log).pack(side="right")
 
         self.log_box = scrolledtext.ScrolledText(tab, state="disabled", wrap="word")
         self.log_box.pack(fill="both", expand=True, padx=10, pady=(0, 10))
