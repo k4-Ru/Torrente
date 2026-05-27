@@ -23,6 +23,13 @@ class TrackerServer:
         self._running = False
         self._server_sock = None
 
+
+
+
+
+
+
+
     
     
     
@@ -55,6 +62,10 @@ class TrackerServer:
         if self._server_sock:
             self._server_sock.close()
 
+    
+    
+    
+    
     
     
     
@@ -156,6 +167,13 @@ class TrackerServer:
                 "torrent_info": swarm["info"],
                 "peers": swarm["peers"],
             }
+            
+            
+            
+            
+            
+            
+            
 
     def _handle_list_torrents(self) -> dict:
         """Return all available torrents."""

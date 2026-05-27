@@ -35,7 +35,7 @@ class PeerNode:
 
         self.piece_manager = PieceManager()
         self.torrent_id = None
-        self.known_peers = []   # [{"ip": ..., "peer_port": ...}]
+        self.known_peers = []   # [{"ip": ..., "peer_port": ...}] 
         self.peer_bitfields = {}  # { (ip, port): set of piece indices }
         self._running = False
         self._server_sock = None
@@ -80,6 +80,18 @@ class PeerNode:
         return self.torrent_id
 
     
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     #  LeecherDownload a file
 
     def download_torrent(self, torrent_id: str, save_dir: str):
@@ -109,6 +121,12 @@ class PeerNode:
         # Start download loop in background
         threading.Thread(target=self._download_loop, daemon=True).start()
 
+    
+    
+    
+    
+    
+    
     
     
     
@@ -202,8 +220,9 @@ class PeerNode:
         while not self.piece_manager.is_complete() and self._running:
             # Refresh peer list from tracker periodically
             self._refresh_peers()
+            peers_snapshot = self._get_known_peers_snapshot()
 
-            if not self.known_peers:
+            if not peers_snapshot:
                 self._log("No peers available, waiting...")
                 time.sleep(3)
                 stall_count += 1
@@ -222,7 +241,7 @@ class PeerNode:
             # Try to download next missing piece from any available peer
             downloaded_any = False
             for piece_idx in missing[:5]:  # Try up to 5 at a time
-                for peer in self.known_peers:
+                for peer in peers_snapshot:
                     success = self._request_piece(peer["ip"], peer["peer_port"], piece_idx)
                     if success:
                         downloaded_any = True
@@ -279,6 +298,11 @@ class PeerNode:
         except Exception:
             pass
         return set()
+    
+    
+    
+    
+    
 
     def _refresh_peers(self):
         """Re-check tracker for updated peer list."""
@@ -299,6 +323,11 @@ class PeerNode:
                 p for p in peers
                 if not (p["ip"] == self.host and p["peer_port"] == self.peer_port)
             ]
+
+    def _get_known_peers_snapshot(self) -> list:
+        """Thread-safe snapshot for iteration in download loop."""
+        with self.lock:
+            return list(self.known_peers)
 
     def stop(self):
         self._running = False

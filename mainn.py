@@ -6,7 +6,11 @@ import os
 import sys
 import time
 
+
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+
 
 from tracker import TrackerServer, tracker_client_request, TRACKER_PORT
 from peer import PeerNode, PEER_SERVER_PORT
@@ -227,6 +231,11 @@ class TorrenteApp:
 
 
 
+
+
+
+
+
     #  Tab: Share 
 
     def _tab_share(self, nb):
@@ -271,6 +280,13 @@ class TorrenteApp:
         # Torrent ID display (hidden until seeding starts)
         self.torrent_id_frame = tk.Frame(tab, relief="groove", bd=1)
         self.torrent_id_label = tk.Label(self.torrent_id_frame, text="", anchor="w", justify="left")
+
+
+
+
+
+
+
 
 
 
@@ -393,6 +409,19 @@ class TorrenteApp:
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
     # Actions 
     def _start_tracker(self):
         port = int(self.tracker_port_var.get())
@@ -404,9 +433,6 @@ class TorrenteApp:
         self.stop_tracker_btn.config(state="normal")
         self._log(f"Tracker started on {self.local_ip}:{port}")
 
-
-
-
     def _stop_tracker(self):
         if self.tracker_server:
             self.tracker_server.stop()
@@ -416,8 +442,7 @@ class TorrenteApp:
         self.stop_tracker_btn.config(state="disabled")
         self._log("Tracker stopped.")
         
-        
-        
+    
 
     def _pick_file(self):
         path = filedialog.askopenfilename(title="Select file to share")
@@ -426,8 +451,6 @@ class TorrenteApp:
             name = os.path.basename(path)
             size_mb = os.path.getsize(path) / (1024 * 1024)
             self.share_file_label.config(text=f"{name} ({size_mb:.2f} MB)")
-
-
 
 
     def _pick_save_dir(self):
@@ -567,6 +590,11 @@ class TorrenteApp:
 
 
 
+
+
+
+
+
     #  Callbacks 
 
     def _on_progress(self, done: int, total: int, filename: str):
@@ -598,6 +626,13 @@ class TorrenteApp:
 
 
 
+
+
+
+
+
+
+
     # Swarm Display Refresh 
     def _refresh_swarm_display(self):
         if self.tracker_server:
@@ -612,6 +647,15 @@ class TorrenteApp:
                 tk.Label(self.swarm_frame, text="No active swarms").pack(anchor="w")
 
         self.root.after(2000, self._refresh_swarm_display)
+
+
+
+
+
+
+
+
+
 
 
 

@@ -87,12 +87,23 @@ class PieceManager:
         self.pending.discard(index)
         return True
 
+
+
+
     def get_piece(self, index: int) -> bytes:
         """Return piece data if we have it."""
         return self.pieces.get(index)
+    
+    
+    
+    
+    
 
     def have_piece(self, index: int) -> bool:
         return index in self.pieces
+    
+    
+    
 
     def missing_pieces(self) -> list:
         """Return list of piece indices we don't have and aren't downloading."""
@@ -101,18 +112,25 @@ class PieceManager:
             if i not in self.pieces and i not in self.pending
         ]
 
+
+
     def have_bitfield(self) -> list:
         """Return list of piece indices we currently own."""
         return list(self.pieces.keys())
 
+
     def is_complete(self) -> bool:
         return len(self.pieces) == self.total_pieces
+
+
 
     def progress(self) -> float:
         """Return download progress as 0.0–1.0."""
         if self.total_pieces == 0:
             return 0.0
         return len(self.pieces) / self.total_pieces
+    
+    
 
     #  File reconstruction
     def reconstruct(self) -> bool:

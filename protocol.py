@@ -20,6 +20,9 @@ def encode(msg_type: int, payload: dict) -> bytes:
     return header + body
 
 
+
+
+
 def recv_message(sock) -> tuple:
     """
     Reliably receive one full message from a socket.
@@ -30,6 +33,9 @@ def recv_message(sock) -> tuple:
     body = _recv_exact(sock, length)
     payload = json.loads(body.decode("utf-8"))
     return msg_type, payload
+
+
+
 
 
 def _recv_exact(sock, n: int) -> bytes:

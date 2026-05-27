@@ -40,7 +40,7 @@ python3 mainn.py
 
 | Port | Purpose |
 |------|---------|
-| 6767 | Tracker server |
+| 6881 | Tracker server |
 | 6882 | Peer file transfer |
 
 Make sure firewalls allow these ports (or disable firewall for testing).
