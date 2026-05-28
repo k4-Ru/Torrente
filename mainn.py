@@ -426,7 +426,16 @@ class TorrenteApp:
     def _start_tracker(self):
         port = int(self.tracker_port_var.get())
         self.tracker_server = TrackerServer(port=port, log_callback=self._log)
-        threading.Thread(target=self.tracker_server.start, daemon=True).start()
+
+        def run_tracker():
+            try:
+                self.tracker_server.start()
+            except Exception as e:
+                error_message = f"Tracker failed to start on port {port}: {e}"
+                self.root.after(0, lambda error_message=error_message: messagebox.showerror("Tracker Error", error_message))
+                self.root.after(0, self._reset_tracker_controls)
+
+        threading.Thread(target=run_tracker, daemon=True).start()
         time.sleep(0.3)
         self.tracker_status_text.config(text=f"Tracker running on {self.local_ip}:{port}")
         self.start_tracker_btn.config(state="disabled")
@@ -437,10 +446,13 @@ class TorrenteApp:
         if self.tracker_server:
             self.tracker_server.stop()
             self.tracker_server = None
+        self._reset_tracker_controls()
+        self._log("Tracker stopped.")
+
+    def _reset_tracker_controls(self):
         self.tracker_status_text.config(text="Tracker stopped")
         self.start_tracker_btn.config(state="normal")
         self.stop_tracker_btn.config(state="disabled")
-        self._log("Tracker stopped.")
         
     
 
