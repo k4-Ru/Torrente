@@ -260,6 +260,18 @@ class PeerNode:
             self._log(f"Download complete! Saving '{self.piece_manager.filename}'...")
             self.piece_manager.reconstruct()
             self._log(f"File saved to: {self.piece_manager.filepath}")
+            # Re-announce to tracker so it can reflect that this peer may now be a full seeder
+            try:
+                torrent_info = self.piece_manager.get_torrent_info()
+                tracker_client_request(self.tracker_ip, self.tracker_port, {
+                    "action": "announce",
+                    "torrent_id": self.torrent_id,
+                    "peer_port": self.peer_port,
+                    "torrent_info": torrent_info,
+                })
+                self._log("Re-announced to tracker as seeder")
+            except Exception:
+                self._log("Failed to re-announce to tracker")
             if self.done_callback:
                 self.done_callback(self.piece_manager.filepath)
 
@@ -277,6 +289,11 @@ class PeerNode:
                     self.piece_manager.pending.add(index)
                     saved = self.piece_manager.save_piece(index, data)
                     if saved:
+                        # Notify other peers we now have this piece (non-blocking)
+                        try:
+                            threading.Thread(target=self._broadcast_have, args=(index,), daemon=True).start()
+                        except Exception:
+                            pass
                         return True
                     else:
                         self._log(f"Piece {index} failed hash check!")
@@ -284,6 +301,31 @@ class PeerNode:
         except Exception:
             return False
         return False
+
+    def _send_have_to_peer(self, peer_ip: str, peer_port: int, index: int):
+        """Send a MSG_HAVE to a single peer (used by _broadcast_have)."""
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(3.0)
+                s.connect((peer_ip, peer_port))
+                s.sendall(encode(MSG_HAVE, {"index": index}))
+        except Exception:
+            pass
+
+    def _broadcast_have(self, index: int):
+        """Notify all known peers that we now have `index`.
+
+        Runs in a background thread and ignores failures to keep behavior robust.
+        """
+        peers = self._get_known_peers_snapshot()
+        for p in peers:
+            # don't send to ourselves
+            if p.get("ip") == self.host and p.get("peer_port") == self.peer_port:
+                continue
+            try:
+                threading.Thread(target=self._send_have_to_peer, args=(p.get("ip"), p.get("peer_port"), index), daemon=True).start()
+            except Exception:
+                continue
 
     def _get_peer_bitfield(self, peer_ip: str, peer_port: int) -> set:
         """Ask a peer which pieces it has."""
