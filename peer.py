@@ -39,6 +39,7 @@ class PeerNode:
         self.peer_bitfields = {}  # { (ip, port): set of piece indices }
         self._running = False
         self._server_sock = None
+        self._heartbeat_thread = None
         self.lock = threading.Lock()
 
 
@@ -77,6 +78,7 @@ class PeerNode:
             raise RuntimeError(f"Tracker error: {resp}")
 
         self._start_server()
+        self._start_heartbeat_loop()
         return self.torrent_id
 
     
@@ -117,6 +119,7 @@ class PeerNode:
         self._log(f"Found {len(self.known_peers)} peers in swarm")
 
         self._start_server()
+        self._start_heartbeat_loop()
 
         # Start download loop in background
         threading.Thread(target=self._download_loop, daemon=True).start()
@@ -355,6 +358,26 @@ class PeerNode:
         except Exception:
             pass
         return set()
+
+    def _start_heartbeat_loop(self):
+        """Periodically tell the tracker that this peer is still online."""
+        if self._heartbeat_thread and self._heartbeat_thread.is_alive():
+            return
+
+        def run():
+            while self._running:
+                try:
+                    tracker_client_request(self.tracker_ip, self.tracker_port, {
+                        "action": "heartbeat",
+                        "torrent_id": self.torrent_id,
+                        "peer_port": self.peer_port,
+                    })
+                except Exception:
+                    pass
+                time.sleep(10)
+
+        self._heartbeat_thread = threading.Thread(target=run, daemon=True)
+        self._heartbeat_thread.start()
     
     
     
@@ -388,6 +411,15 @@ class PeerNode:
 
     def stop(self):
         self._running = False
+        try:
+            if self.torrent_id:
+                tracker_client_request(self.tracker_ip, self.tracker_port, {
+                    "action": "leave",
+                    "torrent_id": self.torrent_id,
+                    "peer_port": self.peer_port,
+                })
+        except Exception:
+            pass
         if self._server_sock:
             self._server_sock.close()
 

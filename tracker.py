@@ -9,6 +9,7 @@ log = logging.getLogger("tracker")
 
 TRACKER_PORT = 6881
 BUFFER_SIZE  = 65536
+PEER_TIMEOUT_SECONDS = 30
 
 
 class TrackerServer:
@@ -22,6 +23,7 @@ class TrackerServer:
         self.lock = threading.Lock()
         self._running = False
         self._server_sock = None
+        self._cleanup_thread = None
 
 
 
@@ -43,6 +45,8 @@ class TrackerServer:
         self._server_sock.listen(20)
         self._server_sock.settimeout(1.0)
         self._log(f"Tracker listening on port {self.port}")
+        self._cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
+        self._cleanup_thread.start()
 
         while self._running:
             try:
@@ -96,6 +100,10 @@ class TrackerServer:
                 response = self._handle_get_peers(msg)
             elif action == "list_torrents":
                 response = self._handle_list_torrents()
+            elif action == "heartbeat":
+                response = self._handle_heartbeat(msg, addr)
+            elif action == "leave":
+                response = self._handle_leave(msg, addr)
             else:
                 response = {"error": "unknown action"}
 
@@ -133,11 +141,13 @@ class TrackerServer:
             swarm = self.torrents[torrent_id]
 
             # Update or add this peer
-            peer_entry = {"ip": addr[0], "peer_port": peer_port}
+            peer_entry = {"ip": addr[0], "peer_port": peer_port, "last_seen": time.time()}
             existing = [p for p in swarm["peers"] if p["ip"] == addr[0] and p["peer_port"] == peer_port]
             if not existing:
                 swarm["peers"].append(peer_entry)
                 self._log(f"Peer {addr[0]}:{peer_port} joined swarm for '{swarm['info']['filename']}'")
+            else:
+                existing[0]["last_seen"] = time.time()
 
             # Return torrent info + all other peers
             other_peers = [p for p in swarm["peers"] if not (p["ip"] == addr[0] and p["peer_port"] == peer_port)]
@@ -146,6 +156,49 @@ class TrackerServer:
                 "torrent_info": swarm["info"],
                 "peers": other_peers,
             }
+
+    def _handle_heartbeat(self, msg: dict, addr) -> dict:
+        """Refresh last_seen for a peer so tracker knows it is still online."""
+        torrent_id = msg.get("torrent_id")
+        peer_port = msg.get("peer_port")
+        if not torrent_id or not peer_port:
+            return {"error": "missing torrent_id or peer_port"}
+
+        with self.lock:
+            if torrent_id not in self.torrents:
+                return {"error": "torrent not found"}
+            swarm = self.torrents[torrent_id]
+            for peer in swarm["peers"]:
+                if peer["ip"] == addr[0] and peer["peer_port"] == peer_port:
+                    peer["last_seen"] = time.time()
+                    return {"status": "ok"}
+        return {"error": "peer not found"}
+
+    def _handle_leave(self, msg: dict, addr) -> dict:
+        """Remove a peer immediately when it shuts down.
+
+        This makes the peer disappear from counts right away instead of waiting
+        for the heartbeat timeout.
+        """
+        torrent_id = msg.get("torrent_id")
+        peer_port = msg.get("peer_port")
+        if not torrent_id or not peer_port:
+            return {"error": "missing torrent_id or peer_port"}
+
+        with self.lock:
+            if torrent_id not in self.torrents:
+                return {"error": "torrent not found"}
+            swarm = self.torrents[torrent_id]
+            before = len(swarm["peers"])
+            swarm["peers"] = [
+                p for p in swarm["peers"]
+                if not (p["ip"] == addr[0] and p["peer_port"] == peer_port)
+            ]
+            removed = before - len(swarm["peers"])
+            if removed:
+                self._log(f"Peer {addr[0]}:{peer_port} left torrent '{swarm['info']['filename']}'")
+                return {"status": "ok"}
+        return {"error": "peer not found"}
             
             
             
@@ -162,10 +215,11 @@ class TrackerServer:
             if torrent_id not in self.torrents:
                 return {"error": "torrent not found"}
             swarm = self.torrents[torrent_id]
+            self._prune_stale_peers_locked(swarm)
             return {
                 "status": "ok",
                 "torrent_info": swarm["info"],
-                "peers": swarm["peers"],
+                "peers": [{"ip": p["ip"], "peer_port": p["peer_port"]} for p in swarm["peers"]],
             }
             
             
@@ -180,6 +234,7 @@ class TrackerServer:
         with self.lock:
             result = []
             for tid, data in self.torrents.items():
+                self._prune_stale_peers_locked(data)
                 result.append({
                     "torrent_id": tid,
                     "filename": data["info"]["filename"],
@@ -224,6 +279,25 @@ class TrackerServer:
         log.info(msg)
         if self.log_callback:
             self.log_callback(msg)
+
+    def _prune_stale_peers_locked(self, swarm: dict):
+        """Remove peers whose heartbeat/announce is too old.
+
+        Caller must hold self.lock.
+        """
+        now = time.time()
+        before = len(swarm["peers"])
+        swarm["peers"] = [p for p in swarm["peers"] if now - p.get("last_seen", 0) <= PEER_TIMEOUT_SECONDS]
+        removed = before - len(swarm["peers"])
+        if removed:
+            self._log(f"Pruned {removed} stale peer(s)")
+
+    def _cleanup_loop(self):
+        while self._running:
+            time.sleep(PEER_TIMEOUT_SECONDS)
+            with self.lock:
+                for swarm in self.torrents.values():
+                    self._prune_stale_peers_locked(swarm)
 
     @property
     def swarm_info(self) -> dict:
