@@ -36,6 +36,7 @@ class PeerNode:
 
         self.piece_manager = PieceManager()
         self.torrent_id = None
+        self.machine_id = self._load_or_create_machine_id()
         self.instance_id = uuid.uuid4().hex
         self.known_peers = []   # [{"ip": ..., "peer_port": ...}] 
         self.peer_bitfields = {}  # { (ip, port): set of piece indices }
@@ -43,6 +44,27 @@ class PeerNode:
         self._server_sock = None
         self._heartbeat_thread = None
         self.lock = threading.Lock()
+
+    def _load_or_create_machine_id(self) -> str:
+        """Return a stable per-machine id stored on disk.
+
+        This lets the tracker count one machine once even if it runs multiple peer
+        instances over time or with different ports.
+        """
+        id_path = os.path.join(os.path.expanduser("~"), ".torrente_machine_id")
+        try:
+            if os.path.exists(id_path):
+                with open(id_path, "r", encoding="utf-8") as f:
+                    value = f.read().strip()
+                    if value:
+                        return value
+            value = uuid.uuid4().hex
+            with open(id_path, "w", encoding="utf-8") as f:
+                f.write(value)
+            return value
+        except Exception:
+            # Fall back to an in-memory identifier if the home directory is unavailable.
+            return uuid.uuid4().hex
 
 
 
@@ -74,6 +96,7 @@ class PeerNode:
             "action": "announce",
             "torrent_id": self.torrent_id,
             "peer_port": self.peer_port,
+            "machine_id": self.machine_id,
             "instance_id": self.instance_id,
             "torrent_info": torrent_info,
         })
@@ -108,6 +131,7 @@ class PeerNode:
             "action": "announce",
             "torrent_id": torrent_id,
             "peer_port": self.peer_port,
+            "machine_id": self.machine_id,
             "instance_id": self.instance_id,
         })
 
@@ -376,6 +400,7 @@ class PeerNode:
                         "action": "heartbeat",
                         "torrent_id": self.torrent_id,
                         "peer_port": self.peer_port,
+                        "machine_id": self.machine_id,
                         "instance_id": self.instance_id,
                     })
                 except Exception:
@@ -423,6 +448,7 @@ class PeerNode:
                     "action": "leave",
                     "torrent_id": self.torrent_id,
                     "peer_port": self.peer_port,
+                    "machine_id": self.machine_id,
                     "instance_id": self.instance_id,
                 })
         except Exception:
