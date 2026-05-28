@@ -130,6 +130,7 @@ class TrackerServer:
         """Peer announces itself as having a torrent."""
         torrent_id = msg["torrent_id"]
         peer_port  = msg["peer_port"]   # the port this peer listens on for piece requests
+        instance_id = msg.get("instance_id")
         torrent_info = msg.get("torrent_info")  # only seeders send this
 
         with self.lock:
@@ -141,8 +142,11 @@ class TrackerServer:
             swarm = self.torrents[torrent_id]
 
             # Update or add this peer
-            peer_entry = {"ip": addr[0], "peer_port": peer_port, "last_seen": time.time()}
-            existing = [p for p in swarm["peers"] if p["ip"] == addr[0] and p["peer_port"] == peer_port]
+            peer_entry = {"ip": addr[0], "peer_port": peer_port, "instance_id": instance_id, "last_seen": time.time()}
+            existing = [
+                p for p in swarm["peers"]
+                if p["ip"] == addr[0] and p["peer_port"] == peer_port and p.get("instance_id") == instance_id
+            ]
             if not existing:
                 swarm["peers"].append(peer_entry)
                 self._log(f"Peer {addr[0]}:{peer_port} joined swarm for '{swarm['info']['filename']}'")
@@ -154,13 +158,17 @@ class TrackerServer:
             return {
                 "status": "ok",
                 "torrent_info": swarm["info"],
-                "peers": other_peers,
+                "peers": [
+                    {"ip": p["ip"], "peer_port": p["peer_port"], "instance_id": p.get("instance_id")}
+                    for p in other_peers
+                ],
             }
 
     def _handle_heartbeat(self, msg: dict, addr) -> dict:
         """Refresh last_seen for a peer so tracker knows it is still online."""
         torrent_id = msg.get("torrent_id")
         peer_port = msg.get("peer_port")
+        instance_id = msg.get("instance_id")
         if not torrent_id or not peer_port:
             return {"error": "missing torrent_id or peer_port"}
 
@@ -169,7 +177,7 @@ class TrackerServer:
                 return {"error": "torrent not found"}
             swarm = self.torrents[torrent_id]
             for peer in swarm["peers"]:
-                if peer["ip"] == addr[0] and peer["peer_port"] == peer_port:
+                if peer["ip"] == addr[0] and peer["peer_port"] == peer_port and peer.get("instance_id") == instance_id:
                     peer["last_seen"] = time.time()
                     return {"status": "ok"}
         return {"error": "peer not found"}
@@ -182,6 +190,7 @@ class TrackerServer:
         """
         torrent_id = msg.get("torrent_id")
         peer_port = msg.get("peer_port")
+        instance_id = msg.get("instance_id")
         if not torrent_id or not peer_port:
             return {"error": "missing torrent_id or peer_port"}
 
@@ -192,7 +201,7 @@ class TrackerServer:
             before = len(swarm["peers"])
             swarm["peers"] = [
                 p for p in swarm["peers"]
-                if not (p["ip"] == addr[0] and p["peer_port"] == peer_port)
+                if not (p["ip"] == addr[0] and p["peer_port"] == peer_port and p.get("instance_id") == instance_id)
             ]
             removed = before - len(swarm["peers"])
             if removed:
@@ -219,7 +228,10 @@ class TrackerServer:
             return {
                 "status": "ok",
                 "torrent_info": swarm["info"],
-                "peers": [{"ip": p["ip"], "peer_port": p["peer_port"]} for p in swarm["peers"]],
+                "peers": [
+                    {"ip": p["ip"], "peer_port": p["peer_port"], "instance_id": p.get("instance_id")}
+                    for p in swarm["peers"]
+                ],
             }
             
             
@@ -303,6 +315,8 @@ class TrackerServer:
     def swarm_info(self) -> dict:
         """Snapshot of current swarms for GUI display."""
         with self.lock:
+            for data in self.torrents.values():
+                self._prune_stale_peers_locked(data)
             return {
                 tid: {
                     "filename": data["info"]["filename"],

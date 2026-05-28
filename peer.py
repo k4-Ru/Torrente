@@ -4,6 +4,7 @@ import hashlib
 import time
 import logging
 import os
+import uuid
 
 from protocol import encode, recv_message, MSG_BITFIELD, MSG_REQUEST, MSG_PIECE, MSG_HAVE
 from piece_manager import PieceManager
@@ -35,6 +36,7 @@ class PeerNode:
 
         self.piece_manager = PieceManager()
         self.torrent_id = None
+        self.instance_id = uuid.uuid4().hex
         self.known_peers = []   # [{"ip": ..., "peer_port": ...}] 
         self.peer_bitfields = {}  # { (ip, port): set of piece indices }
         self._running = False
@@ -72,6 +74,7 @@ class PeerNode:
             "action": "announce",
             "torrent_id": self.torrent_id,
             "peer_port": self.peer_port,
+            "instance_id": self.instance_id,
             "torrent_info": torrent_info,
         })
         if resp.get("status") != "ok":
@@ -105,6 +108,7 @@ class PeerNode:
             "action": "announce",
             "torrent_id": torrent_id,
             "peer_port": self.peer_port,
+            "instance_id": self.instance_id,
         })
 
         if resp.get("status") != "ok":
@@ -281,6 +285,7 @@ class PeerNode:
                     "action": "announce",
                     "torrent_id": self.torrent_id,
                     "peer_port": self.peer_port,
+                    "instance_id": self.instance_id,
                     "torrent_info": torrent_info,
                 })
                 self._log("Re-announced to tracker as seeder")
@@ -334,7 +339,7 @@ class PeerNode:
         peers = self._get_known_peers_snapshot()
         for p in peers:
             # don't send to ourselves
-            if p.get("ip") == self.host and p.get("peer_port") == self.peer_port:
+            if p.get("instance_id") == self.instance_id:
                 continue
             try:
                 threading.Thread(target=self._send_have_to_peer, args=(p.get("ip"), p.get("peer_port"), index), daemon=True).start()
@@ -371,6 +376,7 @@ class PeerNode:
                         "action": "heartbeat",
                         "torrent_id": self.torrent_id,
                         "peer_port": self.peer_port,
+                        "instance_id": self.instance_id,
                     })
                 except Exception:
                     pass
@@ -398,10 +404,10 @@ class PeerNode:
 
     def _update_peers(self, peers: list):
         with self.lock:
-            # Filter out ourselves
+            # Filter out ourselves (same running instance)
             self.known_peers = [
                 p for p in peers
-                if not (p["ip"] == self.host and p["peer_port"] == self.peer_port)
+                if p.get("instance_id") != self.instance_id
             ]
 
     def _get_known_peers_snapshot(self) -> list:
@@ -417,6 +423,7 @@ class PeerNode:
                     "action": "leave",
                     "torrent_id": self.torrent_id,
                     "peer_port": self.peer_port,
+                    "instance_id": self.instance_id,
                 })
         except Exception:
             pass
