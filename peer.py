@@ -36,7 +36,6 @@ class PeerNode:
 
         self.piece_manager = PieceManager()
         self.torrent_id = None
-        self.machine_id = self._load_or_create_machine_id()
         self.instance_id = uuid.uuid4().hex
         self.known_peers = []   # [{"ip": ..., "peer_port": ...}] 
         self.peer_bitfields = {}  # { (ip, port): set of piece indices }
@@ -44,27 +43,11 @@ class PeerNode:
         self._server_sock = None
         self._heartbeat_thread = None
         self.lock = threading.Lock()
-
-    def _load_or_create_machine_id(self) -> str:
-        """Return a stable per-machine id stored on disk.
-
-        This lets the tracker count one machine once even if it runs multiple peer
-        instances over time or with different ports.
-        """
-        id_path = os.path.join(os.path.expanduser("~"), ".torrente_machine_id")
-        try:
-            if os.path.exists(id_path):
-                with open(id_path, "r", encoding="utf-8") as f:
-                    value = f.read().strip()
-                    if value:
-                        return value
-            value = uuid.uuid4().hex
-            with open(id_path, "w", encoding="utf-8") as f:
-                f.write(value)
-            return value
-        except Exception:
-            # Fall back to an in-memory identifier if the home directory is unavailable.
-            return uuid.uuid4().hex
+        # Transfer stats
+        self.uploaded_bytes = 0
+        self.downloaded_bytes = 0
+        self.uploaded_pieces = 0
+        self.downloaded_pieces = 0
 
 
 
@@ -92,14 +75,7 @@ class PeerNode:
         self._log(f"Split into {torrent_info['num_pieces']} pieces")
 
         # Announce to tracker
-        resp = tracker_client_request(self.tracker_ip, self.tracker_port, {
-            "action": "announce",
-            "torrent_id": self.torrent_id,
-            "peer_port": self.peer_port,
-            "machine_id": self.machine_id,
-            "instance_id": self.instance_id,
-            "torrent_info": torrent_info,
-        })
+        resp = tracker_client_request(self.tracker_ip, self.tracker_port, self._tracker_payload("announce", include_torrent_info=True))
         if resp.get("status") != "ok":
             raise RuntimeError(f"Tracker error: {resp}")
 
@@ -127,13 +103,7 @@ class PeerNode:
         self.torrent_id = torrent_id
 
         # Get torrent info + peers from tracker
-        resp = tracker_client_request(self.tracker_ip, self.tracker_port, {
-            "action": "announce",
-            "torrent_id": torrent_id,
-            "peer_port": self.peer_port,
-            "machine_id": self.machine_id,
-            "instance_id": self.instance_id,
-        })
+        resp = tracker_client_request(self.tracker_ip, self.tracker_port, self._tracker_payload("announce"))
 
         if resp.get("status") != "ok":
             self._log(f"Failed to join swarm: {resp.get('error')}")
@@ -173,12 +143,47 @@ class PeerNode:
     #  Piece server (seeder role)
 
     def _start_server(self):
+        # Avoid starting the server twice
+        if self._running and self._server_sock:
+            self._log("Peer server already running")
+            return
+
         self._running = True
-        self._server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._server_sock.bind((self.host, self.peer_port))
-        self._server_sock.listen(20)
-        self._server_sock.settimeout(1.0)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        try:
+            sock.bind((self.host, self.peer_port))
+        except OSError as e:
+            # Address already in use: try nearby ports before failing
+            if getattr(e, 'errno', None) == 48 or 'Address already in use' in str(e):
+                orig = self.peer_port
+                found = False
+                for p in range(self.peer_port + 1, self.peer_port + 21):
+                    try:
+                        sock.bind((self.host, p))
+                        self.peer_port = p
+                        found = True
+                        break
+                    except Exception:
+                        continue
+                if not found:
+                    sock.close()
+                    raise
+                self._log(f"Port {orig} busy, bound peer server to alternate port {self.peer_port}")
+                # If already announced, tell tracker about new port
+                try:
+                    if self.torrent_id:
+                        tracker_client_request(self.tracker_ip, self.tracker_port, self._tracker_payload("announce"))
+                except Exception:
+                    pass
+            else:
+                sock.close()
+                raise
+
+        sock.listen(20)
+        sock.settimeout(1.0)
+        self._server_sock = sock
         self._log(f"Peer server listening on port {self.peer_port}")
         threading.Thread(target=self._accept_loop, daemon=True).start()
 
@@ -231,6 +236,12 @@ class PeerNode:
                         "index": index,
                         "data": data.hex(),
                     }))
+                    with self.lock:
+                        try:
+                            self.uploaded_bytes += len(data)
+                            self.uploaded_pieces += 1
+                        except Exception:
+                            pass
                 else:
                     conn.sendall(encode(MSG_PIECE, {"index": index, "data": None}))
 
@@ -304,14 +315,7 @@ class PeerNode:
             self._log(f"File saved to: {self.piece_manager.filepath}")
             # Re-announce to tracker so it can reflect that this peer may now be a full seeder
             try:
-                torrent_info = self.piece_manager.get_torrent_info()
-                tracker_client_request(self.tracker_ip, self.tracker_port, {
-                    "action": "announce",
-                    "torrent_id": self.torrent_id,
-                    "peer_port": self.peer_port,
-                    "instance_id": self.instance_id,
-                    "torrent_info": torrent_info,
-                })
+                tracker_client_request(self.tracker_ip, self.tracker_port, self._tracker_payload("announce", include_torrent_info=True))
                 self._log("Re-announced to tracker as seeder")
             except Exception:
                 self._log("Failed to re-announce to tracker")
@@ -332,6 +336,12 @@ class PeerNode:
                     self.piece_manager.pending.add(index)
                     saved = self.piece_manager.save_piece(index, data)
                     if saved:
+                        with self.lock:
+                            try:
+                                self.downloaded_bytes += len(data)
+                                self.downloaded_pieces += 1
+                            except Exception:
+                                pass
                         # Notify other peers we now have this piece (non-blocking)
                         try:
                             threading.Thread(target=self._broadcast_have, args=(index,), daemon=True).start()
@@ -370,6 +380,22 @@ class PeerNode:
             except Exception:
                 continue
 
+    def _tracker_payload(self, action: str, include_torrent_info: bool = False) -> dict:
+        payload = {
+            "action": action,
+            "torrent_id": self.torrent_id,
+            "peer_port": self.peer_port,
+            "instance_id": self.instance_id,
+            "uploaded_bytes": self.uploaded_bytes,
+            "downloaded_bytes": self.downloaded_bytes,
+            "uploaded_pieces": self.uploaded_pieces,
+            "downloaded_pieces": self.downloaded_pieces,
+            "is_seeder": self.piece_manager.is_complete(),
+        }
+        if include_torrent_info:
+            payload["torrent_info"] = self.piece_manager.get_torrent_info()
+        return payload
+
     def _get_peer_bitfield(self, peer_ip: str, peer_port: int) -> set:
         """Ask a peer which pieces it has."""
         try:
@@ -396,13 +422,7 @@ class PeerNode:
         def run():
             while self._running:
                 try:
-                    tracker_client_request(self.tracker_ip, self.tracker_port, {
-                        "action": "heartbeat",
-                        "torrent_id": self.torrent_id,
-                        "peer_port": self.peer_port,
-                        "machine_id": self.machine_id,
-                        "instance_id": self.instance_id,
-                    })
+                    tracker_client_request(self.tracker_ip, self.tracker_port, self._tracker_payload("heartbeat"))
                 except Exception:
                     pass
                 time.sleep(10)
@@ -444,17 +464,14 @@ class PeerNode:
         self._running = False
         try:
             if self.torrent_id:
-                tracker_client_request(self.tracker_ip, self.tracker_port, {
-                    "action": "leave",
-                    "torrent_id": self.torrent_id,
-                    "peer_port": self.peer_port,
-                    "machine_id": self.machine_id,
-                    "instance_id": self.instance_id,
-                })
+                tracker_client_request(self.tracker_ip, self.tracker_port, self._tracker_payload("leave"))
         except Exception:
             pass
         if self._server_sock:
-            self._server_sock.close()
+            try:
+                self._server_sock.close()
+            finally:
+                self._server_sock = None
 
     def _log(self, msg: str):
         log.info(msg)

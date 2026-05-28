@@ -130,7 +130,6 @@ class TrackerServer:
         """Peer announces itself as having a torrent."""
         torrent_id = msg["torrent_id"]
         peer_port  = msg["peer_port"]   # the port this peer listens on for piece requests
-        machine_id = msg.get("machine_id")
         instance_id = msg.get("instance_id")
         torrent_info = msg.get("torrent_info")  # only seeders send this
 
@@ -143,13 +142,11 @@ class TrackerServer:
             swarm = self.torrents[torrent_id]
 
             # Update or add this peer
-            peer_entry = {
-                "ip": addr[0],
-                "peer_port": peer_port,
-                "machine_id": machine_id,
-                "instance_id": instance_id,
-                "last_seen": time.time(),
-            }
+            peer_entry = {"ip": addr[0], "peer_port": peer_port, "instance_id": instance_id, "last_seen": time.time()}
+            # accept optional stats
+            for k in ("uploaded_bytes", "downloaded_bytes", "uploaded_pieces", "downloaded_pieces", "is_seeder"):
+                if k in msg:
+                    peer_entry[k] = msg.get(k)
             existing = [
                 p for p in swarm["peers"]
                 if p["ip"] == addr[0] and p["peer_port"] == peer_port and p.get("instance_id") == instance_id
@@ -159,6 +156,9 @@ class TrackerServer:
                 self._log(f"Peer {addr[0]}:{peer_port} joined swarm for '{swarm['info']['filename']}'")
             else:
                 existing[0]["last_seen"] = time.time()
+                for k in ("uploaded_bytes", "downloaded_bytes", "uploaded_pieces", "downloaded_pieces", "is_seeder"):
+                    if k in msg:
+                        existing[0][k] = msg.get(k)
 
             # Return torrent info + all other peers
             other_peers = [p for p in swarm["peers"] if not (p["ip"] == addr[0] and p["peer_port"] == peer_port)]
@@ -166,7 +166,16 @@ class TrackerServer:
                 "status": "ok",
                 "torrent_info": swarm["info"],
                 "peers": [
-                    {"ip": p["ip"], "peer_port": p["peer_port"], "machine_id": p.get("machine_id"), "instance_id": p.get("instance_id")}
+                    {
+                        "ip": p["ip"],
+                        "peer_port": p["peer_port"],
+                        "instance_id": p.get("instance_id"),
+                        "uploaded_bytes": p.get("uploaded_bytes", 0),
+                        "downloaded_bytes": p.get("downloaded_bytes", 0),
+                        "uploaded_pieces": p.get("uploaded_pieces", 0),
+                        "downloaded_pieces": p.get("downloaded_pieces", 0),
+                        "is_seeder": p.get("is_seeder", False),
+                    }
                     for p in other_peers
                 ],
             }
@@ -175,7 +184,6 @@ class TrackerServer:
         """Refresh last_seen for a peer so tracker knows it is still online."""
         torrent_id = msg.get("torrent_id")
         peer_port = msg.get("peer_port")
-        machine_id = msg.get("machine_id")
         instance_id = msg.get("instance_id")
         if not torrent_id or not peer_port:
             return {"error": "missing torrent_id or peer_port"}
@@ -187,6 +195,10 @@ class TrackerServer:
             for peer in swarm["peers"]:
                 if peer["ip"] == addr[0] and peer["peer_port"] == peer_port and peer.get("instance_id") == instance_id:
                     peer["last_seen"] = time.time()
+                    # update stats if included
+                    for k in ("uploaded_bytes", "downloaded_bytes", "uploaded_pieces", "downloaded_pieces", "is_seeder"):
+                        if k in msg:
+                            peer[k] = msg.get(k)
                     return {"status": "ok"}
         return {"error": "peer not found"}
 
@@ -198,7 +210,6 @@ class TrackerServer:
         """
         torrent_id = msg.get("torrent_id")
         peer_port = msg.get("peer_port")
-        machine_id = msg.get("machine_id")
         instance_id = msg.get("instance_id")
         if not torrent_id or not peer_port:
             return {"error": "missing torrent_id or peer_port"}
@@ -238,7 +249,16 @@ class TrackerServer:
                 "status": "ok",
                 "torrent_info": swarm["info"],
                 "peers": [
-                    {"ip": p["ip"], "peer_port": p["peer_port"], "machine_id": p.get("machine_id"), "instance_id": p.get("instance_id")}
+                    {
+                        "ip": p["ip"],
+                        "peer_port": p["peer_port"],
+                        "instance_id": p.get("instance_id"),
+                        "uploaded_bytes": p.get("uploaded_bytes", 0),
+                        "downloaded_bytes": p.get("downloaded_bytes", 0),
+                        "uploaded_pieces": p.get("uploaded_pieces", 0),
+                        "downloaded_pieces": p.get("downloaded_pieces", 0),
+                        "is_seeder": p.get("is_seeder", False),
+                    }
                     for p in swarm["peers"]
                 ],
             }
@@ -256,11 +276,14 @@ class TrackerServer:
             result = []
             for tid, data in self.torrents.items():
                 self._prune_stale_peers_locked(data)
+                num_peers = len(data["peers"])
+                num_seeders = sum(1 for p in data["peers"] if p.get("is_seeder"))
                 result.append({
                     "torrent_id": tid,
                     "filename": data["info"]["filename"],
                     "filesize": data["info"]["filesize"],
-                    "num_peers": self._count_online_machines_locked(data),
+                    "num_peers": num_peers,
+                    "num_seeders": num_seeders,
                 })
             return {"status": "ok", "torrents": result}
 
@@ -329,18 +352,11 @@ class TrackerServer:
             return {
                 tid: {
                     "filename": data["info"]["filename"],
-                    "peers": self._count_online_machines_locked(data),
+                    "peers": len(data["peers"]),
+                    "seeders": sum(1 for p in data["peers"] if p.get("is_seeder")),
                 }
                 for tid, data in self.torrents.items()
             }
-
-    def _count_online_machines_locked(self, swarm: dict) -> int:
-        """Count unique machine IDs currently online.
-
-        Caller must hold self.lock.
-        """
-        machine_ids = {p.get("machine_id") for p in swarm["peers"] if p.get("machine_id")}
-        return len(machine_ids)
 
 
 def tracker_client_request(tracker_ip: str, tracker_port: int, msg: dict) -> dict:

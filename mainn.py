@@ -655,7 +655,8 @@ class TorrenteApp:
                 widget.destroy()
             if info:
                 for tid, data in info.items():
-                    text = f"{data['filename']}  —  {data['peers']} peer(s)  —  ID: {tid}"
+                    seeders = data.get("seeders", 0)
+                    text = f"{data['filename']}  —  {data['peers']} peer(s)  —  {seeders} seeder(s)  —  ID: {tid}"
                     tk.Label(self.swarm_frame, text=text, anchor="w").pack(anchor="w")
             else:
                 tk.Label(self.swarm_frame, text="No active swarms").pack(anchor="w")
