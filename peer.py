@@ -181,6 +181,17 @@ class PeerNode:
                 bitfield = self.piece_manager.have_bitfield()
                 conn.sendall(encode(MSG_BITFIELD, {"pieces": bitfield}))
 
+            elif msg_type == MSG_HAVE:
+                # Peer notifies they obtained a piece; update our view of their bitfield
+                index = payload.get("index")
+                if index is not None:
+                    # find peer_port for this ip from known_peers
+                    with self.lock:
+                        matches = [p for p in self.known_peers if p.get("ip") == addr[0]]
+                    for p in matches:
+                        key = (p.get("ip"), p.get("peer_port"))
+                        self.peer_bitfields.setdefault(key, set()).add(index)
+
             elif msg_type == MSG_REQUEST:
                 index = payload["index"]
                 data = self.piece_manager.get_piece(index)
@@ -336,7 +347,11 @@ class PeerNode:
                 s.sendall(encode(MSG_BITFIELD, {}))
                 msg_type, payload = recv_message(s)
                 if msg_type == MSG_BITFIELD:
-                    return set(payload.get("pieces", []))
+                    pieces = set(payload.get("pieces", []))
+                    # store for quick lookup
+                    with self.lock:
+                        self.peer_bitfields[(peer_ip, peer_port)] = pieces
+                    return pieces
         except Exception:
             pass
         return set()
