@@ -488,7 +488,8 @@ class TorrenteApp:
                 torrent_id = self.peer_node.share_file(self.share_filepath)
                 self.root.after(0, lambda: self._show_torrent_id(torrent_id))
             except Exception as e:
-                self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
+                    error_message = str(e)
+                    self.root.after(0, lambda error_message=error_message: messagebox.showerror("Error", error_message))
 
         threading.Thread(target=run, daemon=True).start()
         
@@ -517,7 +518,8 @@ class TorrenteApp:
                 resp = tracker_client_request(tracker_ip, TRACKER_PORT, {"action": "list_torrents"})
                 self.root.after(0, lambda: self._populate_torrent_list(resp))
             except Exception as e:
-                self.root.after(0, lambda: messagebox.showerror("Error", f"Cannot reach tracker: {e}"))
+                    error_message = f"Cannot reach tracker: {e}"
+                    self.root.after(0, lambda error_message=error_message: messagebox.showerror("Error", error_message))
 
         threading.Thread(target=run, daemon=True).start()
 
